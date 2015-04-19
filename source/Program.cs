@@ -87,6 +87,7 @@ namespace ProvisionOctopusDeploy
             var deploymentProcess = repository.DeploymentProcesses.Get(project.DeploymentProcessId);
 
             CreateVariable(repository, project, "serverInstance", @".\SQL2012");
+            CreateVariable(repository, project, "password", "Redg@te1", true);
 
             deploymentProcess.Steps.Add(new DeploymentStepResource
             {
@@ -138,7 +139,7 @@ namespace ProvisionOctopusDeploy
             repository.DeploymentProcesses.Modify(deploymentProcess);
         }
 
-        private static void CreateVariable(IOctopusRepository repository, ProjectResource project, string name, string value)
+        private static void CreateVariable(IOctopusRepository repository, ProjectResource project, string name, string value, bool isSensitive = false)
         {
             var vs = repository.VariableSets.Get(project.VariableSetId);
 
@@ -146,7 +147,7 @@ namespace ProvisionOctopusDeploy
             if (v != null)
                 v.Value = value;
             else
-                vs.Variables.Add(new VariableResource {Name = name, Value = value});
+                vs.Variables.Add(new VariableResource {Name = name, Value = value, IsSensitive = isSensitive});
 
             repository.VariableSets.Modify(vs);
         }
