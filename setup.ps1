@@ -1,16 +1,20 @@
 $instanceName = "Demo"
 
-$serverConfigPath = "C:\Octopus\Server\OctopusServer.config"
-$serverPath = "C:\Octopus\Server"
+$rootPath = "C:\Octopus\"
 
-$tentacleHome = "C:\Octopus\Tentacle"
-$tentacleConfigPath = "C:\Octopus\Tentacle\Tentacle.config"
-$appsPath = "C:\Octopus\Applications"
+$serverPath = Join-Path $rootPath "Server"
+$serverConfigPath = Join-Path $serverPath "OctopusServer.config"
+
+$tentacleHome = Join-Path $rootPath "Tentacle"
+$tentacleConfigPath = Join-Path $tentacleHome "Tentacle.config"
+$appsPath = Join-Path $rootPath "Applications"
 
 &"C:\Program Files\Octopus Deploy\Octopus\Octopus.Server.exe" service --instance $instanceName --stop --uninstall
 &"C:\Program Files\Octopus Deploy\Octopus\Octopus.Server.exe" delete-instance --instance $instanceName
 &"C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" service --instance $instanceName --stop --uninstall
 &"C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" delete-instance --instance $instanceName
+
+rm -Force -Recurse $rootPath
 
 &"C:\Program Files\Octopus Deploy\Octopus\Octopus.Server.exe" create-instance --instance $instanceName --config $serverConfigPath
 &"C:\Program Files\Octopus Deploy\Octopus\Octopus.Server.exe" configure --instance $instanceName --home $serverPath --storageMode "Embedded" --upgradeCheck "True" --upgradeCheckWithStatistics "True" --webAuthenticationMode "UsernamePassword" --webForceSSL "False" --webListenPrefixes "http://localhost:80/" --storageListenPort "10931" --commsListenPort "10943"
@@ -31,3 +35,9 @@ $thumbPrint = $thumbOut[$thumbOut.Length - 2]
 &"C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" configure --instance $instanceName --port "10933" --console
 &"C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" configure --instance $instanceName --trust $thumbPrint --console
 &"C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" service --instance $instanceName --install --start --console
+
+&"C:\Users\john.walley\Documents\GitHub\provision-octopus-deploy\source\bin\Debug\ProvisionOctopusDeploy.exe"
+
+Start-Sleep -s 5
+
+&"C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" service --instance $instanceName --start --console
