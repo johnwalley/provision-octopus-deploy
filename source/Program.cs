@@ -1,4 +1,6 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
+using System.Net;
 using System.Threading;
 using Newtonsoft.Json.Linq;
 using Octopus.Client;
@@ -21,11 +23,11 @@ namespace ProvisionOctopusDeploy
             var uatEnvironment = CreateEnvironment(repository, "UAT");
             var productionEnvironment = CreateEnvironment(repository, "Production");
 
+            var environments = new[] { integrationEnvironment, uatEnvironment, productionEnvironment };
+
             var integrationMachine = CreateMachine(repository, integrationEnvironment, "Integration");
             var uatMachine = CreateMachine(repository, uatEnvironment, "UAT");
             var productionMachine = CreateMachine(repository, productionEnvironment, "Production");
-
-            var environments = new[] {integrationEnvironment, uatEnvironment, productionEnvironment};
         
             var projectGroup = CreateProjectGroup(repository);
 
@@ -33,22 +35,38 @@ namespace ProvisionOctopusDeploy
 
             var project = CreateProject(repository, projectGroup, lifecycle, "SimpleTalk");
 
-            CreateDeploymentProcess(repository, project);
+            FeedResource feed = null;
+
+            try
+            {
+                feed = repository.Feeds.Create(new FeedResource { Name = "TeamCity", FeedUri = "http://localhost/" });
+            }
+            catch (Exception)
+            {
+                feed = repository.Feeds.FindByName("TeamCity");
+            }
+
+            CreateDeploymentProcess(repository, project, feed);
 
             CreateDashboard(repository, environments, project);
 
-            var template = repository.Client.Get<ActionTemplateResource>(repository.Client.RootDocument.Links["ActionTemplates"]);
+            CreateActionTemplate(repository);
+        }
 
+        private static void CreateActionTemplate(IOctopusRepository repository)
+        {
             string name;
             string scriptBody;
 
-            using (var webClient = new System.Net.WebClient())
+            using (var webClient = new WebClient())
             {
-                var json = webClient.DownloadString("https://raw.githubusercontent.com/OctopusDeploy/Library/master/step-templates/redgate-create-database-release.json");
+                var json =
+                    webClient.DownloadString(
+                        "https://raw.githubusercontent.com/OctopusDeploy/Library/master/step-templates/redgate-create-database-release.json");
                 var o = JObject.Parse(json);
                 name = (string) o["Name"];
                 var properties = o["Properties"];
-                scriptBody = (string)properties["Octopus.Action.Script.ScriptBody"];
+                scriptBody = (string) properties["Octopus.Action.Script.ScriptBody"];
             }
 
             var actionTemplateResource = new ActionTemplateResource
@@ -56,21 +74,46 @@ namespace ProvisionOctopusDeploy
                 Name = name,
                 ActionType = "Octopus.Script",
                 Properties =
-                        {
-                            {SpecialVariables.Action.Script.ScriptBody, scriptBody}
-                        }
+                {
+                    {SpecialVariables.Action.Script.ScriptBody, scriptBody}
+                }
             };
 
-
             repository.Client.Post(repository.Client.RootDocument.Links["ActionTemplates"], actionTemplateResource);
-
         }
 
-        private static void CreateDeploymentProcess(OctopusRepository repository, ProjectResource project)
+        private static void CreateDeploymentProcess(IOctopusRepository repository, ProjectResource project, FeedResource feed)
         {
             var deploymentProcess = repository.DeploymentProcesses.Get(project.DeploymentProcessId);
 
-            var deploymentStepResource = new DeploymentStepResource
+            CreateVariable(repository, project, "serverInstance", @".\SQL2012");
+
+            deploymentProcess.Steps.Add(new DeploymentStepResource
+            {
+                Name = "Download and extract database package",
+                Condition = DeploymentStepCondition.Success,
+                Properties =
+                {
+                    {"Octopus.Action.TargetRoles", "database"}
+                },
+                Actions =
+                {
+                    new DeploymentActionResource
+                    {
+                        ActionType = "Octopus.TentaclePackage",
+                        Name = "Database package",
+                        Properties =
+                        {
+                            {SpecialVariables.Action.Package.NuGetPackageId, "SimpleTalkDatabase"},
+                            {SpecialVariables.Action.Package.NuGetFeedId, feed.Id},
+                            {SpecialVariables.Action.Package.AutomaticallyRunConfigurationTransformationFiles, "False"},
+                            {SpecialVariables.Action.Package.AutomaticallyUpdateAppSettingsAndConnectionStrings, "False"}
+                        }
+                    }
+                }
+            });
+
+            deploymentProcess.Steps.Add(new DeploymentStepResource
             {
                 Name = "Step A",
                 Condition = DeploymentStepCondition.Success,
@@ -90,11 +133,22 @@ namespace ProvisionOctopusDeploy
                         }
                     }
                 }
-            };
-
-            deploymentProcess.Steps.Add(deploymentStepResource);
+            });
 
             repository.DeploymentProcesses.Modify(deploymentProcess);
+        }
+
+        private static void CreateVariable(IOctopusRepository repository, ProjectResource project, string name, string value)
+        {
+            var vs = repository.VariableSets.Get(project.VariableSetId);
+
+            var v = vs.Variables.FirstOrDefault(x => x.Name == name);
+            if (v != null)
+                v.Value = value;
+            else
+                vs.Variables.Add(new VariableResource {Name = name, Value = value});
+
+            repository.VariableSets.Modify(vs);
         }
 
         private static DashboardConfigurationResource CreateDashboard(OctopusRepository repository, IResource[] environments,
