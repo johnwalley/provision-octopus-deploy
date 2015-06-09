@@ -9,6 +9,11 @@ $tentacleHome = Join-Path $rootPath "Tentacle"
 $tentacleConfigPath = Join-Path $tentacleHome "Tentacle.config"
 $appsPath = Join-Path $rootPath "Applications"
 
+$databaseServer = "(local)"
+$databaseName = "Octopus"
+
+$storageConnectionString = "Server=$databaseServer;Database=$databaseName;Trusted_Connection=True;"
+
 &"C:\Program Files\Octopus Deploy\Octopus\Octopus.Server.exe" service --instance $instanceName --stop --uninstall
 &"C:\Program Files\Octopus Deploy\Octopus\Octopus.Server.exe" delete-instance --instance $instanceName
 &"C:\Program Files\Octopus Deploy\Tentacle\Tentacle.exe" service --instance $instanceName --stop --uninstall
@@ -17,7 +22,7 @@ $appsPath = Join-Path $rootPath "Applications"
 rm -Force -Recurse $rootPath
 
 &"C:\Program Files\Octopus Deploy\Octopus\Octopus.Server.exe" create-instance --instance $instanceName --config $serverConfigPath
-&"C:\Program Files\Octopus Deploy\Octopus\Octopus.Server.exe" configure --instance $instanceName --home $serverPath --storageMode "Embedded" --upgradeCheck "True" --upgradeCheckWithStatistics "True" --webAuthenticationMode "UsernamePassword" --webForceSSL "False" --webListenPrefixes "http://localhost:80/" --storageListenPort "10931" --commsListenPort "10943"
+&"C:\Program Files\Octopus Deploy\Octopus\Octopus.Server.exe" configure --instance $instanceName --home $serverPath --storageConnectionString $storageConnectionString --upgradeCheck "True" --upgradeCheckWithStatistics "True" --webAuthenticationMode "UsernamePassword" --webForceSSL "False" --webListenPrefixes "http://localhost:80/" --commsListenPort "10943"
 &"C:\Program Files\Octopus Deploy\Octopus\Octopus.Server.exe" admin --instance $instanceName --username "Redgate" --password "Redg@te1" --wait "5000"
 &"C:\Program Files\Octopus Deploy\Octopus\Octopus.Server.exe" license --instance $instanceName --free
 
